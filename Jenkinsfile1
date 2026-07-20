@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        IMAGE_NAME = 'ganesh996640/bookmyshow:latest'
+        IMAGE_NAME = "ganesh996640/bookmyshow:latest"
     }
 
     stages {
@@ -26,7 +26,7 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv('sonar-server') {
                     sh """
@@ -40,7 +40,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                echo 'Skipping SonarQube Quality Gate'
+                echo "Skipping Quality Gate"
             }
         }
 
@@ -56,13 +56,13 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency Check') {
+        stage('OWASP Scan') {
             steps {
-                echo 'Skipping OWASP Dependency Check'
+                echo "Skipping OWASP Dependency Check"
             }
         }
 
-        stage('Trivy File Scan') {
+        stage('Trivy Scan') {
             steps {
                 sh '''
                 trivy fs . > trivyfs.txt || true
@@ -87,10 +87,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                docker build --no-cache \
-                    -t ${IMAGE_NAME} \
-                    -f bookmyshow-app/Dockerfile \
-                    bookmyshow-app
+                docker build \
+                -t ${IMAGE_NAME} \
+                -f bookmyshow-app/Dockerfile \
+                bookmyshow-app
                 '''
             }
         }
@@ -104,7 +104,7 @@ pipeline {
             }
         }
 
-        stage('Deploy Container') {
+        stage('Deploy Application') {
             steps {
                 sh '''
                 docker stop bookmyshow || true
@@ -113,10 +113,10 @@ pipeline {
                 docker pull ${IMAGE_NAME}
 
                 docker run -d \
-                    --restart always \
-                    --name bookmyshow \
-                    -p 80:80 \
-                    ${IMAGE_NAME}
+                  --restart unless-stopped \
+                  --name bookmyshow \
+                  -p 80:80 \
+                  ${IMAGE_NAME}
 
                 docker ps
                 '''
@@ -130,11 +130,9 @@ pipeline {
                 attachLog: true,
                 subject: "${currentBuild.currentResult}: ${env.JOB_NAME}",
                 body: """
-Project : ${env.JOB_NAME}
-
-Build Number : ${env.BUILD_NUMBER}
-
-Build URL : ${env.BUILD_URL}
+Job Name: ${env.JOB_NAME}
+Build Number: ${env.BUILD_NUMBER}
+Build URL: ${env.BUILD_URL}
 """,
                 to: "gpeddireddy358@gmail.com",
                 attachmentsPattern: "trivyfs.txt"
