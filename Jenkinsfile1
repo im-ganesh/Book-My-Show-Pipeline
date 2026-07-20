@@ -19,9 +19,10 @@ pipeline {
             }
         }
 
-        stage('Checkout from GitHub') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'master', url: 'https://github.com/im-ganesh/Book-My-Show-Pipeline.git'
+                git branch: 'master',
+                    url: 'https://github.com/im-ganesh/Book-My-Show-Pipeline.git'
             }
         }
 
@@ -50,7 +51,7 @@ pipeline {
                 dir('bookmyshow-app') {
                     sh '''
                     rm -rf node_modules
-                    npm install --legacy-peer-deps --force --no-audit --no-fund
+                    npm install --legacy-peer-deps
                     '''
                 }
             }
@@ -82,6 +83,7 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
+
                     sh '''
                     echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                     '''
@@ -89,21 +91,21 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
+        stage('Build Docker Image') {
             steps {
                 sh '''
                 docker build \
-                -t ganesh996640/bookmyshow:latest \
+                -t ${IMAGE_NAME} \
                 -f bookmyshow-app/Dockerfile \
                 bookmyshow-app
                 '''
             }
         }
 
-        stage('Docker Push') {
+        stage('Push Docker Image') {
             steps {
                 sh '''
-                docker push ganesh996640/bookmyshow:latest
+                docker push ${IMAGE_NAME}
                 docker logout
                 '''
             }
@@ -115,11 +117,13 @@ pipeline {
                 docker stop bookmyshow || true
                 docker rm bookmyshow || true
 
+                docker pull ${IMAGE_NAME}
+
                 docker run -d \
-                --restart always \
-                --name bookmyshow \
-                -p 3000:3000 \
-                ganesh996640/bookmyshow:latest
+                  --restart always \
+                  --name bookmyshow \
+                  -p 80:80 \
+                  ${IMAGE_NAME}
 
                 docker ps
                 '''
