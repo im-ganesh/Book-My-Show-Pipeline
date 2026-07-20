@@ -49,8 +49,8 @@ pipeline {
             steps {
                 dir('bookmyshow-app') {
                     sh '''
-                        rm -rf node_modules
-                        npm install --legacy-peer-deps --force --no-audit --no-fund
+                    rm -rf node_modules
+                    npm install --legacy-peer-deps --force --no-audit --no-fund
                     '''
                 }
             }
@@ -60,7 +60,7 @@ pipeline {
             steps {
                 dependencyCheck(
                     odcInstallation: 'dp-check',
-                    additionalArguments: '--scan . --noupdate --disableYarnAudit --disableNodeAudit --disableRetireJS'
+                    additionalArguments: '--scan . --noupdate --disableYarnAudit --disableNodeAudit --disableRetireJs'
                 )
 
                 dependencyCheckPublisher(
@@ -75,33 +75,54 @@ pipeline {
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Docker Login') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh """
-                        docker build -t ${IMAGE_NAME} -f bookmyshow-app/Dockerfile bookmyshow-app
-                        docker push ${IMAGE_NAME}
-                        """
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
                 }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                docker build \
+                -t ganesh996640/bookmyshow:latest \
+                -f bookmyshow-app/Dockerfile \
+                bookmyshow-app
+                '''
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                sh '''
+                docker push ganesh996640/bookmyshow:latest
+                docker logout
+                '''
             }
         }
 
         stage('Deploy Container') {
             steps {
-                sh """
+                sh '''
                 docker stop bookmyshow || true
                 docker rm bookmyshow || true
 
                 docker run -d \
-                  --restart always \
-                  --name bookmyshow \
-                  -p 3000:3000 \
-                  ${IMAGE_NAME}
+                --restart always \
+                --name bookmyshow \
+                -p 3000:3000 \
+                ganesh996640/bookmyshow:latest
 
                 docker ps
-                """
+                '''
             }
         }
     }
@@ -118,8 +139,8 @@ Build Number : ${env.BUILD_NUMBER}
 
 Build URL : ${env.BUILD_URL}
 """,
-                to: "gpeddireddy358@gmail.com",
-                attachmentsPattern: "trivyfs.txt"
+                to: 'gpeddireddy358@gmail.com',
+                attachmentsPattern: 'trivyfs.txt'
             )
         }
     }
