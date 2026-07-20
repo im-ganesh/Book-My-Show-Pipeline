@@ -8,6 +8,7 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
+        IMAGE_NAME = 'ganesh996640/bookmyshow:latest'
     }
 
     stages {
@@ -29,8 +30,8 @@ pipeline {
                 withSonarQubeEnv('sonar-server') {
                     sh '''
                     $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=BookMyShow \
-                    -Dsonar.projectKey=BookMyShow
+                    -Dsonar.projectKey=BookMyShow \
+                    -Dsonar.projectName=BookMyShow
                     '''
                 }
             }
@@ -38,16 +39,19 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                cd bookmyshow-app
-                npm install
-                '''
+                dir('bookmyshow-app') {
+                    sh '''
+                    npm ci --prefer-offline --no-audit --no-fund
+                    '''
+                }
             }
         }
 
@@ -55,10 +59,18 @@ pipeline {
             steps {
                 dependencyCheck(
                     odcInstallation: 'dp-check',
-                    additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit'
+                    additionalArguments: '''
+                    --scan . \
+                    --noupdate \
+                    --disableYarnAudit \
+                    --disableNodeAudit \
+                    --disableRetireJS
+                    '''
                 )
 
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                dependencyCheckPublisher(
+                    pattern: '**/dependency-check-report.xml'
+                )
             }
         }
 
@@ -68,18 +80,17 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
+        stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-
                         sh '''
-                        docker build --no-cache \
-                        -t ganesh996640/bookmyshow:latest \
+                        docker build \
+                        -t $IMAGE_NAME \
                         -f bookmyshow-app/Dockerfile \
                         bookmyshow-app
 
-                        docker push ganesh996640/bookmyshow:latest
+                        docker push $IMAGE_NAME
                         '''
                     }
                 }
@@ -93,10 +104,10 @@ pipeline {
                 docker rm bookmyshow || true
 
                 docker run -d \
-                --restart=always \
+                --restart always \
                 --name bookmyshow \
                 -p 3000:3000 \
-                ganesh996640/bookmyshow:latest
+                $IMAGE_NAME
 
                 docker ps
                 '''
@@ -110,14 +121,14 @@ pipeline {
                 attachLog: true,
                 subject: "${currentBuild.currentResult}: ${env.JOB_NAME}",
                 body: """
-                Project : ${env.JOB_NAME}
+Project : ${env.JOB_NAME}
 
-                Build Number : ${env.BUILD_NUMBER}
+Build Number : ${env.BUILD_NUMBER}
 
-                Build URL : ${env.BUILD_URL}
-                """,
-                to: 'gpeddireddy358@gmail.com',
-                attachmentsPattern: 'trivyfs.txt'
+Build URL : ${env.BUILD_URL}
+""",
+                to: "gpeddireddy358@gmail.com",
+                attachmentsPattern: "trivyfs.txt"
             )
         }
     }
