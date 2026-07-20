@@ -1,4 +1,5 @@
-FROM node:18
+# ---------- Build Stage ----------
+FROM node:18 AS build
 
 WORKDIR /app
 
@@ -8,10 +9,13 @@ RUN npm install --legacy-peer-deps
 
 COPY . .
 
-RUN npm install chokidar@3 watchpack-chokidar2 --legacy-peer-deps
+RUN npm run build
 
-ENV NODE_OPTIONS=--openssl-legacy-provider
+# ---------- Production Stage ----------
+FROM nginx:alpine
 
-EXPOSE 3000
+COPY --from=build /app/build /usr/share/nginx/html
 
-CMD ["npm","start"]
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
